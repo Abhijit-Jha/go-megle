@@ -3,7 +3,8 @@ import React from 'react'
 const Rooms = () => {
   return (
     <div>
-      room
+      <video>1</video>
+      <video>1</video>
     </div>
   )
 }
