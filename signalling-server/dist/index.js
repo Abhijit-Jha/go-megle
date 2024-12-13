@@ -36,6 +36,8 @@ wss.on("connection", (ws) => {
         console.log("A user disconnected");
         roomMap.forEach((group, roomId) => {
             if (group.user1.socket === ws || group.user2.socket === ws) {
+                const otherUser = group.user1.socket === ws ? group.user2 : group.user1;
+                otherUser.socket.send(JSON.stringify({ type: "Disconnected", name: group.user1.name }));
                 roomMap.delete(roomId);
                 if (group.user1.socket == ws) {
                     queueOfUsers.push(group.user2);
@@ -46,6 +48,10 @@ wss.on("connection", (ws) => {
                 console.log(`Room ${roomId} removed due to disconnection`);
             }
         });
+        if (ROOMS <= 1)
+            ROOMS = 0;
+        else
+            ROOMS--;
     });
 });
 function signallingServer(socket1, socket2) {

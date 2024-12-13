@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "@types/ws": "^8.5.13",
+    "signalling-server": "file:",
     "ws": "^8.18.0"
   }
 }
