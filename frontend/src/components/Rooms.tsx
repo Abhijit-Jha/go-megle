@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { v4 as uuidv4 } from 'uuid';
-
 
 const Rooms = () => {
   const location = useLocation();
@@ -11,18 +9,21 @@ const Rooms = () => {
   const [user2Name, setUser2Name] = useState<string>("");
   const [isPaired, setIsPaired] = useState<boolean>(false);
   const socketRef = useRef<WebSocket | null>(null); //to maintain persistent connections
-  const [user1Stream, setUser1Stream] = useState<MediaStream | null>(null) //user1 is local
-  const [user2Stream, setUser2Stream] = useState<MediaStream | null>(null) //user2 is peer
   const video1 = useRef<HTMLVideoElement | null>(null);
   const video2 = useRef<HTMLVideoElement | null>(null);
-  const [senderPC, setSenderPC] = useState<RTCPeerConnection | null >(null);
-  const [recieverPC, setRecieverPC] = useState<RTCPeerConnection  | null >(null);
+  // const [senderPC, setSenderPC] = useState<RTCPeerConnection | null>(null);
+  const senderPC = useRef<RTCPeerConnection | null>(null);
+  const recieverPC = useRef<RTCPeerConnection | null>(null);
+  // const [recieverPC, setRecieverPC] = useState<RTCPeerConnection | null>(null);
+
+  const user1Media = useRef<MediaStream | null>(null);
+  const user2Media = useRef<MediaStream | null>(null);
+
   useEffect(() => {
     if (name && !socketRef.current) {
       setUser1Name(name);
       initiateMedia();
       initialiseWebSocket();
-      console.log(user1Stream)
     }
   }, [name]);
 
@@ -61,86 +62,90 @@ const Rooms = () => {
 
 
   const sendOffer = async () => {
-    const peerConnection = new RTCPeerConnection();
-    setSenderPC(peerConnection);
-    console.log("peerconnnection sfaf: ",senderPC)
+    senderPC.current = new RTCPeerConnection();
+    if (!senderPC.current) {
+      return;
+    }
+    console.log("peerconnnection sfaf: ", senderPC)
     console.log("initiating media")
-    // peerConnection.onnegotiationneeded = async()=>{
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socketRef.current?.send(JSON.stringify({
-        type: "offer",
-        sdp: offer
-      }));
-    // }
-    console.log("user media",user1Stream)
 
+    if (user1Media.current) {
+      user1Media.current.getTracks().forEach((track) => {
+        senderPC.current?.addTrack(track);
+      });
+    }
+    // senderPC.current.onnegotiationneeded = async () => {
+    const offer = await senderPC.current?.createOffer();
+    await senderPC.current?.setLocalDescription(offer);
+    socketRef.current?.send(JSON.stringify({
+      type: "offer",
+      sdp: offer
+    }));
+    // }
+
+    senderPC.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current?.send(JSON.stringify({
+          type: "iceCandidate",
+          candidate: event.candidate
+        }));
+      }
+    }
   }
 
   const initiateMedia = async () => {
-    // if (!senderPC) {
-    //   console.log("no media initiated");
-    //   return;
-    // }
     console.log("Taking media permissions");
-    
-    const stream: MediaStream = await navigator.mediaDevices.getUserMedia({
+
+    user1Media.current = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true
     })
 
-    setUser1Stream(stream);
-    
-    // if (video1.current) {
-    //   video1.current.srcObject = stream;
-    //   await video1.current.play();
-    // }
 
-    // stream.getTracks().forEach((track) => {
-    //   senderPC?.addTrack(track);
-    // })
+    // setUser1Stream(stream);
 
-    // senderPC.ontrack = async (event) => {
-    //   if (video2.current) {
-    //     setUser2Stream(new MediaStream([event.track]));
-    //     video2.current.srcObject = new MediaStream([event.track]);
-    //     const video2play = video2.current.play();
-    //     video2play.then(() => {
-    //       console.log("Playing")
-    //     }).catch(() => {
-    //       console.log("No play")
-    //     })
-    //   }
-    // }
+    if (video1.current) {
+      video1.current.srcObject = user1Media.current;
+      await video1.current.play();
+    }
 
-    // senderPC.onicecandidate = (event) => {
-    //   sendOffer();
-    //   if (event.candidate) {
-    //     socketRef.current?.send(JSON.stringify({
-    //       type: "iceCandidate",
-    //       candidate: event.candidate
-    //     }));
-    //   }
-    // }
+    user1Media.current.getTracks().forEach((track) => {
+      senderPC.current?.addTrack(track);
+    })
+
+    console.log("user 1 media", user1Media.current);
   }
 
   const handleOffer = async (offer: RTCSessionDescription) => {
-    const peerConnection = new RTCPeerConnection();
-    setRecieverPC(peerConnection);
-    await peerConnection.setRemoteDescription(offer)
-    const answer = await peerConnection.createAnswer()
-    await peerConnection.setLocalDescription(answer);
+    recieverPC.current = new RTCPeerConnection();
+    console.log(recieverPC.current, "sdfa")
+    if (recieverPC.current) {
+      recieverPC.current.ontrack = async (event) => {
+        user2Media.current = new MediaStream([event.track]);
+        console.log("user2 media", user2Media.current);
+        if (video2.current) {
+          video2.current.srcObject = user2Media.current;
+          const playPromise = video2.current.play();
+          if(playPromise!=undefined){
+            playPromise.then(_ =>alert("Video played")).catch(() => alert("console.error"));
+          }
+        }
+      }
+    }
+    await recieverPC.current.setRemoteDescription(offer);
+    const answer = await recieverPC.current.createAnswer();
+    await recieverPC.current.setLocalDescription(answer);
     socketRef.current?.send(JSON.stringify({
       type: "answer",
       sdp: answer
-    }))
+    }));
   }
 
   const handleAnswer = async (answer: RTCSessionDescription) => {
     if (!senderPC) {
-      console.log("NO sender PC")
+      console.log("NO sender PC");
     }
-    await senderPC?.setRemoteDescription(answer)
+    await senderPC.current?.setRemoteDescription(answer);
   }
 
   const handeleIceCandidate = async (iceCandidate: RTCIceCandidate) => {
@@ -148,7 +153,7 @@ const Rooms = () => {
       console.log("NO pc");
       return;
     };
-    senderPC.addIceCandidate(iceCandidate);
+    senderPC.current?.addIceCandidate(iceCandidate);
   };
 
   //handle Disconnection --> remove name and reload the page
@@ -164,8 +169,9 @@ const Rooms = () => {
       <p>User 1: {user1Name}</p>
       <p>User 2: {user2Name ? user2Name : "Waiting for peer"}</p>
       {isPaired && <p>You're paired! Start chatting.</p>}
-      <video ref={video1} autoPlay></video>
+      <video ref={video1}></video>
       <video ref={video2} autoPlay></video>
+      {JSON.stringify(senderPC.current)}
     </div>
   );
 };
