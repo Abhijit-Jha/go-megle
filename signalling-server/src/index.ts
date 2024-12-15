@@ -15,14 +15,18 @@ let roomMap: Map<Number, Group> = new Map()
 let ROOMS: number = 0
 wss.on("connection", (ws) => {
     console.log("connected")
-    ws.on("message", (data) => {
+    ws.on("message", (message) => {
         //getting the name from the frontend and add the user to the queue
-        const user: User = {
-            name: data.toString(),
-            socket: ws
-        }
-        queueOfUsers.push(user)
 
+        const data = JSON.parse(message.toString())
+        if (data.name) {
+            const user: User = {
+                name: data.name,
+                socket: ws
+            }
+            console.log("name is send")
+            queueOfUsers.push(user)
+        }
         if (queueOfUsers.length >= 2) {
             const [user1, user2] = queueOfUsers.splice(0, 2)
 
@@ -43,13 +47,13 @@ wss.on("connection", (ws) => {
     })
     ws.on("close", () => {
         queueOfUsers = queueOfUsers.filter((user) => user.socket !== ws);
-        
+
         console.log("A user disconnected");
 
         roomMap.forEach((group, roomId) => {
             if (group.user1.socket === ws || group.user2.socket === ws) {
                 const otherUser = group.user1.socket === ws ? group.user2 : group.user1;
-                otherUser.socket.send(JSON.stringify({ type: "Disconnected" ,name : group.user1.name}));
+                otherUser.socket.send(JSON.stringify({ type: "Disconnected", name: group.user1.name }));
                 roomMap.delete(roomId);
                 if (group.user1.socket == ws) {
                     queueOfUsers.push(group.user2)
@@ -59,7 +63,7 @@ wss.on("connection", (ws) => {
                 console.log(`Room ${roomId} removed due to disconnection`);
             }
         });
-        if(ROOMS<=1) ROOMS=0
+        if (ROOMS <= 1) ROOMS = 0
         else ROOMS--;
     })
 })
@@ -70,12 +74,15 @@ function signallingServer(socket1: WebSocket, socket2: WebSocket) {
         const message = JSON.parse(data.toString())
         switch (message.type) {
             case "offer":
+                console.log("offer from user1", message)
                 socket2.send(JSON.stringify({ type: "offer", sdp: message.sdp }));
                 break;
             case "answer":
-                socket1.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
+                console.log("answer from user1", message)
+                socket2.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
                 break;
             case "iceCandidate":
+                console.log("candidate from user1", message)
                 socket2.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate }));
                 break;
         }
@@ -86,12 +93,15 @@ function signallingServer(socket1: WebSocket, socket2: WebSocket) {
         const message = JSON.parse(data.toString())
         switch (message.type) {
             case "offer":
+                console.log("offer from user2", message)
                 socket1.send(JSON.stringify({ type: "offer", sdp: message.sdp }));
                 break;
             case "answer":
-                socket2.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
+                console.log("answer from user2", message)
+                socket1.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
                 break;
             case "iceCandidate":
+                console.log("iceCandidate from user2", message)
                 socket1.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate }));
                 break;
         }

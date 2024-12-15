@@ -7,13 +7,17 @@ let roomMap = new Map();
 let ROOMS = 0;
 wss.on("connection", (ws) => {
     console.log("connected");
-    ws.on("message", (data) => {
+    ws.on("message", (message) => {
         //getting the name from the frontend and add the user to the queue
-        const user = {
-            name: data.toString(),
-            socket: ws
-        };
-        queueOfUsers.push(user);
+        const data = JSON.parse(message.toString());
+        if (data.name) {
+            const user = {
+                name: data.name,
+                socket: ws
+            };
+            console.log("name is send");
+            queueOfUsers.push(user);
+        }
         if (queueOfUsers.length >= 2) {
             const [user1, user2] = queueOfUsers.splice(0, 2);
             user1.socket.send(JSON.stringify({ type: "Paired", peer: user2.name }));
@@ -59,12 +63,15 @@ function signallingServer(socket1, socket2) {
         const message = JSON.parse(data.toString());
         switch (message.type) {
             case "offer":
+                console.log("offer from user1", message);
                 socket2.send(JSON.stringify({ type: "offer", sdp: message.sdp }));
                 break;
             case "answer":
-                socket1.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
+                console.log("answer from user1", message);
+                socket2.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
                 break;
             case "iceCandidate":
+                console.log("candidate from user1", message);
                 socket2.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate }));
                 break;
         }
@@ -73,12 +80,15 @@ function signallingServer(socket1, socket2) {
         const message = JSON.parse(data.toString());
         switch (message.type) {
             case "offer":
+                console.log("offer from user2", message);
                 socket1.send(JSON.stringify({ type: "offer", sdp: message.sdp }));
                 break;
             case "answer":
-                socket2.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
+                console.log("answer from user2", message);
+                socket1.send(JSON.stringify({ type: "answer", sdp: message.sdp }));
                 break;
             case "iceCandidate":
+                console.log("iceCandidate from user2", message);
                 socket1.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate }));
                 break;
         }
