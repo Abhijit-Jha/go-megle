@@ -13,6 +13,7 @@
   "dependencies": {
     "@types/ws": "^8.5.13",
     "signalling-server": "file:",
+    "uuid": "^11.0.3",
     "ws": "^8.18.0"
   }
 }

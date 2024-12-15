@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = require("ws");
+const uuid_1 = require("uuid");
 const wss = new ws_1.WebSocketServer({ port: 8080 });
 let queueOfUsers = [];
 let roomMap = new Map();
-let ROOMS = 0;
 wss.on("connection", (ws) => {
     console.log("connected");
     ws.on("message", (message) => {
@@ -22,7 +22,7 @@ wss.on("connection", (ws) => {
             const [user1, user2] = queueOfUsers.splice(0, 2);
             user1.socket.send(JSON.stringify({ type: "Paired", peer: user2.name }));
             user2.socket.send(JSON.stringify({ type: "Paired", peer: user1.name }));
-            const roomId = ROOMS++;
+            const roomId = (0, uuid_1.v4)();
             const room = {
                 user1,
                 user2
@@ -52,10 +52,6 @@ wss.on("connection", (ws) => {
                 console.log(`Room ${roomId} removed due to disconnection`);
             }
         });
-        if (ROOMS <= 1)
-            ROOMS = 0;
-        else
-            ROOMS--;
     });
 });
 function signallingServer(socket1, socket2) {

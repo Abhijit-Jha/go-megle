@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-
+import { v4 as uuid } from "uuid"
 const wss = new WebSocketServer({ port: 8080 })
 interface User {
     name: string,
@@ -10,14 +10,14 @@ interface Group {
     user1: User,
     user2: User
 }
+
 let queueOfUsers: Array<User> = []
-let roomMap: Map<Number, Group> = new Map()
-let ROOMS: number = 0
+let roomMap: Map<String, Group> = new Map()
+
 wss.on("connection", (ws) => {
     console.log("connected")
     ws.on("message", (message) => {
         //getting the name from the frontend and add the user to the queue
-
         const data = JSON.parse(message.toString())
         if (data.name) {
             const user: User = {
@@ -32,7 +32,7 @@ wss.on("connection", (ws) => {
 
             user1.socket.send(JSON.stringify({ type: "Paired", peer: user2.name }));
             user2.socket.send(JSON.stringify({ type: "Paired", peer: user1.name }));
-            const roomId = ROOMS++;
+            const roomId = uuid();
             const room: Group = {
                 user1,
                 user2
@@ -47,9 +47,7 @@ wss.on("connection", (ws) => {
     })
     ws.on("close", () => {
         queueOfUsers = queueOfUsers.filter((user) => user.socket !== ws);
-
         console.log("A user disconnected");
-
         roomMap.forEach((group, roomId) => {
             if (group.user1.socket === ws || group.user2.socket === ws) {
                 const otherUser = group.user1.socket === ws ? group.user2 : group.user1;
@@ -63,8 +61,6 @@ wss.on("connection", (ws) => {
                 console.log(`Room ${roomId} removed due to disconnection`);
             }
         });
-        if (ROOMS <= 1) ROOMS = 0
-        else ROOMS--;
     })
 })
 
