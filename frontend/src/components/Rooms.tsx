@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
-const Rooms = () => {
+export default function Rooms(){
   const location = useLocation();
   const url = new URLSearchParams(location.search);
   const name = url.get("name");
@@ -11,10 +11,8 @@ const Rooms = () => {
   const socketRef = useRef<WebSocket | null>(null); //to maintain persistent connections
   const video1 = useRef<HTMLVideoElement | null>(null);
   const video2 = useRef<HTMLVideoElement | null>(null);
-  // const [senderPC, setSenderPC] = useState<RTCPeerConnection | null>(null);
   const senderPC = useRef<RTCPeerConnection | null>(null);
   const recieverPC = useRef<RTCPeerConnection | null>(null);
-  // const [recieverPC, setRecieverPC] = useState<RTCPeerConnection | null>(null);
 
   const user1Media = useRef<MediaStream | null>(null);
   const user2Media = useRef<MediaStream | null>(null);
@@ -60,20 +58,14 @@ const Rooms = () => {
     }
   }
 
-
   const sendOffer = async () => {
     senderPC.current = new RTCPeerConnection();
     if (!senderPC.current) {
       return;
     }
-    console.log("peerconnnection sfaf: ", senderPC)
-    console.log("initiating media")
+    console.log("peerconnnection", senderPC)
 
-    if (user1Media.current) {
-      user1Media.current.getTracks().forEach((track) => {
-        senderPC.current?.addTrack(track);
-      });
-    }
+
     senderPC.current.onnegotiationneeded = async () => {
       const offer = await senderPC.current?.createOffer();
       await senderPC.current?.setLocalDescription(offer);
@@ -96,45 +88,50 @@ const Rooms = () => {
   const initiateMedia = async () => {
     console.log("Taking media permissions");
 
-    user1Media.current = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true
     })
+    user1Media.current = stream
 
+    if (user1Media.current) {
+      user1Media.current.getTracks().forEach((track) => {
+        senderPC.current?.addTrack(track, stream);
+      });
+    } else {
+      console.error("dsfasdfsd")
+    }
 
-    // setUser1Stream(stream);
+    console.log("sdfa", user2Media.current)
 
     if (video1.current) {
       video1.current.srcObject = user1Media.current;
       await video1.current.play().catch(e => console.error("error hia")).then(e => console.warn("lad"));
     }
 
-    // user1Media.current.getTracks().forEach((track) => {
-    //   senderPC.current?.addTrack(track);
-    // })
-    senderPC.current?.addTrack(user1Media.current.getVideoTracks()[0])
-
     console.log("user 1 media", user1Media.current);
   }
 
   const handleOffer = async (offer: RTCSessionDescription) => {
     recieverPC.current = new RTCPeerConnection();
-    console.log(recieverPC.current, "sdfa")
+    console.log(recieverPC.current, "sdfa");
 
     if (recieverPC.current) {
-      recieverPC.current.ontrack = async (event) => {
-        if(!user2Media.current){
-        user2Media.current = new MediaStream([event.track]);
-        }
-        
-        console.log("user2 media", user2Media.current);
-        if (video2.current) {
-          video2.current.srcObject = event.streams[0]
-          await video2.current.play().catch(_ => console.error("error hai"));
-        }
+      recieverPC.current.ontrack = (event) => {
+        event.streams[0].getTracks().forEach(track => {
+          user2Media.current?.addTrack(track)
+        })
       }
+    } else {
+      console.error("nahi hua user2media add")
     }
-    
+
+    console.log("user2 media", user2Media.current);
+    if (video2.current) {
+      video2.current.srcObject = user2Media.current
+      video2.current.play().then(() => console.log("hogya")).catch(e => console.error)
+    }
+
     await recieverPC.current.setRemoteDescription(offer);
     const answer = await recieverPC.current.createAnswer();
     await recieverPC.current.setLocalDescription(answer);
@@ -144,9 +141,9 @@ const Rooms = () => {
     }));
 
 
-    recieverPC.current.onicecandidate = (event)=>{
-      if(event.candidate){
-        socketRef.current?.send(JSON.stringify({type : "iceCandidate",candidate : event.candidate}));
+    recieverPC.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current?.send(JSON.stringify({ type: "iceCandidate", candidate: event.candidate }));
       }
     }
   }
@@ -169,13 +166,12 @@ const Rooms = () => {
       console.error("No appropriate peer connection to add ICE candidate.");
     }
   };
-  
+
 
   //handle Disconnection --> remove name and reload the page
   const handleDisconnect = async () => {
     window.location.reload();
   };
-
 
   return (
     <div>
@@ -189,6 +185,4 @@ const Rooms = () => {
       {JSON.stringify(senderPC.current)}
     </div>
   );
-};
-
-export default Rooms;
+}
